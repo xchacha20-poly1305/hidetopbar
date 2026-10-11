@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import Gdk from 'gi://Gdk';
 import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
 
@@ -47,7 +48,8 @@ export default class HideTopBarPreferences extends ExtensionPreferences {
          'show-in-overview',
          'hot-corner',
          'mouse-triggers-overview',
-         'keep-round-corners'
+         'keep-round-corners',
+         'keep-visible-in-touch-mode'
         ].forEach(function (s) {
             let settings_onoff = builder.get_object(
                 "toggle_" + s.replace(/-/g, "_")
@@ -60,6 +62,17 @@ export default class HideTopBarPreferences extends ExtensionPreferences {
                 settings_onoff.set_active(settings.get_boolean(b));
             });
         });
+
+        // Touch mode needs a touchscreen, so the option has nothing to do
+        // without one.
+        let seat = Gdk.Display.get_default()?.get_default_seat();
+        if (seat && !(seat.get_capabilities() & Gdk.SeatCapabilities.TOUCH)) {
+            ['label', 'toggle'].forEach(function (w) {
+                builder.get_object(
+                    w + "_keep_visible_in_touch_mode"
+                ).set_sensitive(false);
+            });
+        }
 
         ['pressure-threshold',
          'pressure-timeout'
