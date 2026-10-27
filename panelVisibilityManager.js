@@ -52,6 +52,7 @@ export class PanelVisibilityManager {
         this._staticBox = new Clutter.ActorBox();
         this._animationActive = false;
         this._shortcutTimeout = null;
+        this._hotCornerTimeoutId = 0;
         this._unredirectDisabled = false;
         this._menuToggleId = 0;
 
@@ -431,9 +432,15 @@ export class PanelVisibilityManager {
           if(!panel_hidden || this._settings.get_boolean('hot-corner')) {
               HotCorner.setBarrierSize(PanelBox.height);
           } else {
-              GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, function () {
-                  HotCorner.setBarrierSize(0)
-              });
+              if (this._hotCornerTimeoutId)
+                  GLib.source_remove(this._hotCornerTimeoutId);
+              this._hotCornerTimeoutId = GLib.timeout_add(
+                  GLib.PRIORITY_DEFAULT, 100, () => {
+                      this._hotCornerTimeoutId = 0;
+                      HotCorner.setBarrierSize(0);
+                      return GLib.SOURCE_REMOVE;
+                  }
+              );
           }
         }
     }
@@ -606,6 +613,20 @@ export class PanelVisibilityManager {
         if (this._bindTimeoutId) {
             GLib.source_remove(this._bindTimeoutId);
             this._bindTimeoutId = 0;
+        }
+        if (this._hotCornerTimeoutId) {
+            GLib.source_remove(this._hotCornerTimeoutId);
+            this._hotCornerTimeoutId = 0;
+        }
+        if (this._shortcutTimeout) {
+            if (this._shortcutTimeout !== true)
+                GLib.source_remove(this._shortcutTimeout);
+            this._shortcutTimeout = null;
+        }
+        if (this._blockerMenu) {
+            this._blockerMenu.disconnect(this._menuEvent);
+            this._menuEvent = null;
+            this._blockerMenu = null;
         }
         this._intellihide.destroy();
         this._signalsHandler.destroy();

@@ -169,13 +169,17 @@ export class Intellihide extends Signals.EventEmitter {
         let signalId = wa.connect(
             'notify::allocation', this._checkOverlap.bind(this)
         );
-        this._trackedWindows.set(wa, signalId);
-        wa.connect('destroy', this._removeWindowSignals.bind(this));
+        let destroyId = wa.connect(
+            'destroy', this._removeWindowSignals.bind(this)
+        );
+        this._trackedWindows.set(wa, {signalId, destroyId});
     }
 
     _removeWindowSignals(wa) {
-        if (this._trackedWindows.get(wa)) {
-           wa.disconnect(this._trackedWindows.get(wa));
+        let ids = this._trackedWindows.get(wa);
+        if (ids) {
+           wa.disconnect(ids.signalId);
+           wa.disconnect(ids.destroyId);
            this._trackedWindows.delete(wa);
         }
     }
