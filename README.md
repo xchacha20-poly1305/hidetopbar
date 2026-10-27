@@ -84,6 +84,23 @@ Troubleshooting
 
 Follow the [instructions to assign a system-wide shortcut that disables/enables the extension](https://gitlab.gnome.org/tuxor1337/hidetopbar/issues/43#issuecomment-796583424).
 
+### How do I reach the top bar on a touchscreen?
+
+The mouse triggers (pressure barrier, hot corner) do not react to touch. Swipe up with three fingers to open the
+overview: the top bar is shown there as long as "Show panel in overview" is enabled.
+
+On a tablet or 2-in-1, the extension can also stop hiding the top bar while GNOME reports touch mode. Turn on "Keep top bar
+visible in touch mode" in the preferences (the switch is greyed out when no touchscreen is found). Without the preferences
+window, use gsettings (command for a per-user install, adjust the path otherwise):
+
+    gsettings --schemadir ~/.local/share/gnome-shell/extensions/hidetopbar@mathieu.bidon.ca/schemas \
+        set org.gnome.shell.extensions.hidetopbar keep-visible-in-touch-mode true
+
+Whether touch mode is reported depends on the device. On Wayland it needs a touchscreen. If the device has a tablet-mode
+switch (the keyboard is folded away), the switch must be engaged. If it has none, no mouse or touchpad may be attached.
+On X11 (GNOME 45 to 49, where an X11 session exists) any touchscreen counts, so the top bar stays visible all the time.
+A rough check: if the on-screen keyboard pops up when you tap a text field, touch mode is on.
+
 ### Notification pop-ups cause the top bar to hide.
 
 Use another extension (like [Just Perfection](https://extensions.gnome.org/extension/3843/just-perfection/) or [Notification Banner Reloaded](https://extensions.gnome.org/extension/4651/notification-banner-reloaded/)) to configure the position where notification pop-ups show up, e.g. at the bottom of the screen or just a few pixels down where they won't overlap with the top bar.

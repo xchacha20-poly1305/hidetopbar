@@ -115,5 +115,13 @@
         When enabled, the panel will be visible in overview.
       </description>
     </key>
+    <key name="keep-visible-in-touch-mode" type="b">
+      <default>false</default>
+      <summary>Keep panel visible in touch mode</summary>
+      <description>
+        When enabled, the panel is not hidden while the system reports touch
+        mode (a tablet or 2-in-1 used without keyboard and mouse).
+      </description>
+    </key>
   </schema>
 </schemalist>
