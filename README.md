@@ -54,7 +54,7 @@ to try one of the following:
 
 You can enable the extension through the interface on [extensions.gnome.org](https://extensions.gnome.org), the [gnome-extensions-app](https://apps.gnome.org/de/Extensions/), or the following command line:
 
-    gnome-extensions enable hidetopbar@mathieu.bidon.ca
+    gnome-extensions enable hidetopbar@io.github.xchacha20-poly1305
 
 Updating the language strings
 -----------------------------
@@ -72,7 +72,7 @@ run one of the following commands:
     make all-po
     
     # for updating one specific po file, where 'XX' is the language code:
-    make ./locale/XX/LC_MESSAGES/hidetopbar@mathieu.bidon.ca.po
+    make ./locale/XX/LC_MESSAGES/hidetopbar@io.github.xchacha20-poly1305.po
 
 As mentioned in the previous section, running `make` requires the `gettext` package
 to be installed (the package names may vary depending on your distribution).

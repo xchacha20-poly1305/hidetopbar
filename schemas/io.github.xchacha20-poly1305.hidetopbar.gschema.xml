@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.hidetopbar" path="/org/gnome/shell/extensions/hidetopbar/">
+  <schema id="io.github.xchacha20-poly1305.hidetopbar" path="/io/github/xchacha20-poly1305/hidetopbar/">
     <key name="hot-corner" type="b">
       <default>false</default>
       <summary>Keep hot corner sensitive or not</summary>

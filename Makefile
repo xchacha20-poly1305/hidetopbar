@@ -10,7 +10,7 @@ LOCALES_MO = $(patsubst %.po,%.mo,$(LOCALES_PO))
 
 all: hidetopbar.zip
 
-schemas/gschemas.compiled:
+schemas/gschemas.compiled: $(wildcard schemas/*.gschema.xml)
 	glib-compile-schemas --strict ./schemas/
 
 hidetopbar.zip: schemas/gschemas.compiled $(LOCALES_MO)
