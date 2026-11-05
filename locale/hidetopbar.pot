@@ -96,3 +96,15 @@ msgstr ""
 #: Settings.ui:544
 msgid "Intellihide"
 msgstr ""
+
+#: Settings.ui
+msgid "Show panel with a downward swipe from the top edge"
+msgstr ""
+
+#: Settings.ui
+msgid "Also allow touchscreen reveal when fullscreen"
+msgstr ""
+
+#: Settings.ui
+msgid "Keep panel visible after touch (seconds)"
+msgstr ""

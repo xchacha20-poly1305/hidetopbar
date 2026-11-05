@@ -30,6 +30,8 @@ const shellVersion = Number.parseInt(major);
 
 import * as Convenience from './convenience.js';
 import * as Intellihide from './intellihide.js';
+import {TouchHold} from './touchState.js';
+import {TouchRevealGesture} from './touchGesture.js';
 import * as DesktopIconsIntegration from './desktopIconsIntegration.js';
 const DEBUG = Convenience.DEBUG;
 
@@ -58,6 +60,17 @@ export class PanelVisibilityManager {
         this._panelHidden = false;
         this._edgePointerListener = 0;
         this._edgeDwellTimeout = 0;
+        this._touchMenus = new Map();
+        this._touchHold = new TouchHold(
+            (delay, callback) => GLib.timeout_add(
+                GLib.PRIORITY_DEFAULT, delay * 1000, () => {
+                    callback();
+                    return GLib.SOURCE_REMOVE;
+                }),
+            id => GLib.source_remove(id),
+            () => this._settings.get_double('touch-delay'),
+            () => this._handleMenus()
+        );
 
         this._desktopIconsUsableArea = (
             new DesktopIconsIntegration.DesktopIconsUsableAreaClass()
@@ -121,16 +134,16 @@ export class PanelVisibilityManager {
 
     hide(animationTime, trigger) {
         DEBUG("hide(" + trigger + ")");
-        if(this._preventHide) return;
+        if(this._preventHide || this._touchHold.active) return;
 
         let anchor_y = PanelBox.get_pivot_point()[1],
             delta_y = -PanelBox.height;
         if(anchor_y < 0) delta_y = -delta_y;
-        let mouse = global.get_pointer();
-        if(trigger == "mouse-left" && this._isHovering(...mouse)) return;
+        if(trigger == "mouse-left" && this._isPointerHovering()) return;
 
         this._stopWatchingPointer();
         this._panelHidden = true;
+        this._touchGesture?.sync();
 
         if(this._animationActive) {
             PanelBox.remove_all_transitions();
@@ -180,6 +193,7 @@ export class PanelVisibilityManager {
     show(animationTime, trigger) {
         DEBUG("show(" + trigger + ")");
         this._panelHidden = false;
+        this._touchGesture?.sync();
         this._cancelEdgeDwell();
         if(trigger == "mouse-enter"
            && this._settings.get_boolean('mouse-triggers-overview')) {
@@ -213,9 +227,7 @@ export class PanelVisibilityManager {
                     this._animationActive = false;
                     this._updateStaticBox();
 
-                    const mouse = global.get_pointer();
-
-                    if(!this._isHovering(...mouse))
+                    if(!this._isPointerHovering())
                     {
                         // The cursor has already left the panel, so we can
                         // start hiding the panel immediately.
@@ -272,6 +284,12 @@ export class PanelVisibilityManager {
                     x < this._staticBox.x2 );
     }
 
+    _isPointerHovering() {
+        // Touch hides the cursor but leaves its last coordinates at the edge.
+        return this._cursorTracker.get_pointer_visible()
+            && this._isHovering(...global.get_pointer());
+    }
+
     _stopWatchingPointer() {
         if(this._pointerListener) {
             this._cursorTracker.disconnect(this._pointerListener);
@@ -280,12 +298,14 @@ export class PanelVisibilityManager {
     }
 
     _handlePointer(x, y) {
-        if(!this._animationActive && !this._isHovering(x, y)) {
+        if(!this._animationActive
+            && (!this._cursorTracker.get_pointer_visible() || !this._isHovering(x, y))) {
             this._handleMenus();
         }
     }
 
     _handleMenus() {
+        this._syncTouchMenu();
         if(!Main.overview.visible) {
             let blocker = Main.panel.menuManager.activeMenu;
             if(blocker == null) {
@@ -293,7 +313,9 @@ export class PanelVisibilityManager {
                     this._settings.get_double('animation-time-autohide'),
                     "mouse-left"
                 );
-            } else {
+            } else if (this._blockerMenu !== blocker) {
+                if (this._blockerMenu)
+                    this._blockerMenu.disconnect(this._menuEvent);
                 this._blockerMenu = blocker;
                 this._menuEvent = this._blockerMenu.connect(
                     'open-state-changed',
@@ -566,10 +588,18 @@ export class PanelVisibilityManager {
 
     _bindUIChanges() {
         this._signalsHandler.add(
+            [Main.overview, 'hidden', () => this._touchGesture?.refresh()],
+            [global.stage, 'notify::is-grabbed', () => this._touchGesture?.refresh()],
+            [global.display, 'in-fullscreen-changed',
+                () => this._touchGesture?.sync()],
+            [global.display, 'notify::focus-window',
+                () => this._touchGesture?.sync()],
             [
                 Main.overview,
                 'showing',
                 () => {
+                    this._touchHold.reset();
+                    this._touchGesture?.cancel();
                     if(this._showInOverview) {
                         this.show(
                             this._settings.get_double(
@@ -615,6 +645,7 @@ export class PanelVisibilityManager {
                     this._base_y = PanelBox.y;
                     this._updateStaticBox();
                     this._updateSettingsMouseSensitive();
+                    this._updateTouchGesture();
                     // LayoutManager._updateBoxes() has just moved PanelBox
                     // back on screen: hide it again unless it is held.
                     this._handleMenus();
@@ -634,11 +665,98 @@ export class PanelVisibilityManager {
         );
 
         this._updateIntellihideStatus();
+        this._updateTouchGesture();
+    }
+
+    _canRevealWithTouch() {
+        return this._panelHidden
+            && this._settings.get_boolean('touch-sensitive')
+            && Main.actionMode === ShellActionMode.NORMAL
+            && Main.modalCount === 0
+            && !Main.overview.visible
+            && (!Main.layoutManager.primaryMonitor?.inFullscreen
+                || this._settings.get_boolean('touch-sensitive-fullscreen-window'));
+    }
+
+    _watchTouchMenus() {
+        // Observe before dispatching the touch that may open a panel menu.
+        for (const menu of Main.panel.menuManager._menus) {
+            if (this._touchMenus.has(menu))
+                continue;
+            const stateId = menu.connect('open-state-changed',
+                () => this._syncTouchMenu());
+            const destroyId = menu.connect('destroy', () => {
+                menu.disconnect(stateId);
+                menu.disconnect(destroyId);
+                this._touchMenus.delete(menu);
+                this._syncTouchMenu();
+            });
+            this._touchMenus.set(menu, [stateId, destroyId]);
+        }
+    }
+
+    _syncTouchMenu() {
+        this._touchHold.setMenuOpen(
+            Boolean(Main.panel.menuManager.activeMenu?.isOpen));
+    }
+
+    _handleTouch(event) {
+        const sequence = event.get_event_sequence()?.get_slot();
+        if (event.type() === Clutter.EventType.TOUCH_BEGIN) {
+            this._watchTouchMenus();
+            const [x, y] = event.get_coords();
+            const [panelX, panelY] = PanelBox.get_transformed_position();
+            const [width, height] = PanelBox.get_transformed_size();
+            if (Main.panel.menuManager.activeMenu
+                || (PanelBox.visible && x >= panelX && x < panelX + width
+                    && y >= panelY && y < panelY + height))
+                this._touchHold.press(sequence);
+        } else {
+            this._touchHold.release(sequence);
+        }
+    }
+
+    _resetTouchReveal() {
+        this._touchGesture?.destroy();
+        this._touchGesture = null;
+        this._touchHold.reset();
+        for (const [menu, ids] of this._touchMenus) {
+            for (const id of ids)
+                menu.disconnect(id);
+        }
+        this._touchMenus.clear();
+    }
+
+    _updateTouchGesture() {
+        this._resetTouchReveal();
+        if (this._settings.get_boolean('touch-sensitive')) {
+            this._watchTouchMenus();
+            this._touchGesture = new TouchRevealGesture(
+                () => Main.layoutManager.primaryMonitor,
+                () => this._canRevealWithTouch(),
+                contact => {
+                    this._touchHold.reveal(contact);
+                    this._syncTouchMenu();
+                    this.show(this._settings.get_double('animation-time-autohide'),
+                        'touch-gesture');
+                },
+                event => this._handleTouch(event),
+                this._cursorTracker
+            );
+        }
+        if (this._intellihide)
+            this._handleMenus();
     }
 
     _bindSettingsChanges() {
         this._signalsHandler = new Convenience.GlobalSignalsHandler();
         this._signalsHandler.addWithLabel("settings",
+            [this._settings, 'changed::touch-sensitive',
+                () => this._updateTouchGesture()],
+            [this._settings, 'changed::touch-sensitive-fullscreen-window',
+                () => this._updateTouchGesture()],
+            [this._settings, 'changed::touch-delay',
+                () => this._touchHold.refresh()],
             [
                 this._settings,
                 'changed::hot-corner',
@@ -682,6 +800,7 @@ export class PanelVisibilityManager {
             GLib.source_remove(this._bindTimeoutId);
             this._bindTimeoutId = 0;
         }
+        this._resetTouchReveal();
         this._intellihide.destroy();
         this._signalsHandler.destroy();
         Main.wm.removeKeybinding("shortcut-keybind");

@@ -100,3 +100,15 @@ msgstr "仅当活动窗口占用面板空间时才隐藏面板"
 #: Settings.ui:544
 msgid "Intellihide"
 msgstr "智能隐藏"
+
+#: Settings.ui
+msgid "Show panel with a downward swipe from the top edge"
+msgstr "从屏幕顶部边缘下滑时显示面板"
+
+#: Settings.ui
+msgid "Also allow touchscreen reveal when fullscreen"
+msgstr "全屏时也允许触摸唤起面板"
+
+#: Settings.ui
+msgid "Keep panel visible after touch (seconds)"
+msgstr "触摸后面板保持显示的时间（秒）"

@@ -18,6 +18,7 @@
  */
 
 import Gtk from 'gi://Gtk';
+import Gio from 'gi://Gio';
 import Adw from 'gi://Adw';
 
 import {
@@ -75,6 +76,17 @@ export default class HideTopBarPreferences extends ExtensionPreferences {
                 settings_spin.set_value(settings.get_int(b));
             });
         });
+
+        for (const key of ['touch-sensitive', 'touch-sensitive-fullscreen-window']) {
+            settings.bind(key, builder.get_object('toggle_' + key.replaceAll('-', '_')),
+                'active', Gio.SettingsBindFlags.DEFAULT);
+        }
+        settings.bind('touch-delay', builder.get_object('spin_touch_delay'),
+            'value', Gio.SettingsBindFlags.DEFAULT);
+        for (const id of ['toggle_touch_sensitive_fullscreen_window', 'spin_touch_delay']) {
+            settings.bind('touch-sensitive', builder.get_object(id), 'sensitive',
+                Gio.SettingsBindFlags.GET);
+        }
 
         /**********************************************************************
          ****************************** Section Animation *********************

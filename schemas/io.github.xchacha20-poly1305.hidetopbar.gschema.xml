@@ -9,6 +9,19 @@
         state. Set to "false" to get rid of the hot corner in hidden state.
       </description>
     </key>
+    <key name="touch-sensitive" type="b">
+      <default>true</default>
+      <summary>Show panel with a downward touchscreen swipe from the top edge</summary>
+    </key>
+    <key name="touch-sensitive-fullscreen-window" type="b">
+      <default>true</default>
+      <summary>Allow touchscreen reveal over fullscreen windows</summary>
+    </key>
+    <key name="touch-delay" type="d">
+      <range min="1.0" max="30.0"/>
+      <default>3.0</default>
+      <summary>Seconds to keep the panel visible after touch interaction</summary>
+    </key>
     <key name="mouse-sensitive" type="b">
       <default>false</default>
       <summary>Show panel when mouse approaches edge of the screen</summary>

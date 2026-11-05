@@ -5,6 +5,15 @@ This GNOME extension helps to hide GNOME's top bar when it gets into your way.
 
 In the extension's preferences, different behaviors can be specified: unhiding on mouse-over or on pressing a keyboard shortcut, or when no window requires the space.
 
+On a touchscreen, swipe down with one finger from the top 8 logical pixels of
+the primary screen for at least 32 logical pixels to reveal the bar. The bar
+stays visible for 3 seconds after you lift your finger. Touching the bar pauses
+this delay, and opening a panel menu keeps the bar visible until the menu closes.
+The touchscreen switch, fullscreen behavior and delay (1–30 seconds) can be
+configured independently of mouse reveal in the Sensitivity preferences.
+While the bar is hidden, these top 8 pixels are reserved for touchscreen gestures,
+including taps. Mouse input uses the normal screen area.
+
 ![clip](./preview.gif)
 
 Installation from extensions.gnome.org
@@ -55,6 +64,13 @@ to try one of the following:
 You can enable the extension through the interface on [extensions.gnome.org](https://extensions.gnome.org), the [gnome-extensions-app](https://apps.gnome.org/de/Extensions/), or the following command line:
 
     gnome-extensions enable hidetopbar@io.github.xchacha20-poly1305
+
+Tests
+-----
+
+Run `make test` for the gesture and visibility regression tests (requires Node.js).
+On GNOME Shell 51, `make test-native` runs virtual-touch tests against an isolated
+headless Shell and GTK clients, including repeated touchscreen window dragging.
 
 Updating the language strings
 -----------------------------
