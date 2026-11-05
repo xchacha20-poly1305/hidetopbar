@@ -39,6 +39,7 @@ const ShellActionMode = (
     Shell.ActionMode ? Shell.ActionMode : Shell.KeyBindingMode
 );
 const _searchEntryBin = Main.overview._overview._controls._searchEntryBin;
+const EDGE_DWELL_TIME = 250;
 
 export class PanelVisibilityManager {
 
@@ -54,6 +55,9 @@ export class PanelVisibilityManager {
         this._shortcutTimeout = null;
         this._unredirectDisabled = false;
         this._menuToggleId = 0;
+        this._panelHidden = false;
+        this._edgePointerListener = 0;
+        this._edgeDwellTimeout = 0;
 
         this._desktopIconsUsableArea = (
             new DesktopIconsIntegration.DesktopIconsUsableAreaClass()
@@ -126,6 +130,7 @@ export class PanelVisibilityManager {
         if(trigger == "mouse-left" && this._isHovering(...mouse)) return;
 
         this._stopWatchingPointer();
+        this._panelHidden = true;
 
         if(this._animationActive) {
             PanelBox.remove_all_transitions();
@@ -144,6 +149,8 @@ export class PanelVisibilityManager {
                 }
                 this._updateHotCorner(true);
                 this._setUnredirectDisabled(false);
+                if (this._edgePointerListener)
+                    this._checkEdgeDwell();
             }
         });
     }
@@ -172,6 +179,8 @@ export class PanelVisibilityManager {
 
     show(animationTime, trigger) {
         DEBUG("show(" + trigger + ")");
+        this._panelHidden = false;
+        this._cancelEdgeDwell();
         if(trigger == "mouse-enter"
            && this._settings.get_boolean('mouse-triggers-overview')) {
             Main.overview.show();
@@ -359,12 +368,78 @@ export class PanelVisibilityManager {
 
     _disablePressureBarrier() {
         this._stopWatchingPointer();
+        this._cancelEdgeDwell();
+        if (this._edgePointerListener) {
+            this._cursorTracker.disconnect(this._edgePointerListener);
+            this._edgePointerListener = 0;
+        }
 
         if(this._panelBarrier && this._panelPressure) {
             this._panelPressure.removeBarrier(this._panelBarrier);
             this._panelBarrier.destroy();
             this._panelBarrier = null;
         }
+        this._panelPressure?.destroy();
+        this._panelPressure = null;
+    }
+
+    _canRevealWithPointer() {
+        return this._settings.get_boolean('mouse-sensitive')
+            && Main.actionMode === ShellActionMode.NORMAL
+            && Main.modalCount === 0
+            && !Main.overview.visible
+            && (!Main.layoutManager.primaryMonitor?.inFullscreen
+                || this._settings.get_boolean('mouse-sensitive-fullscreen-window'));
+    }
+
+    _isPointerAtEdge() {
+        const [x, y, modifiers] = global.get_pointer();
+        const buttons = Clutter.ModifierType.BUTTON1_MASK
+            | Clutter.ModifierType.BUTTON2_MASK | Clutter.ModifierType.BUTTON3_MASK
+            | Clutter.ModifierType.BUTTON4_MASK | Clutter.ModifierType.BUTTON5_MASK;
+        let anchor = PanelBox.get_pivot_point()[1];
+        if (anchor < 0)
+            anchor -= PanelBox.height;
+        const edgeY = this._base_y - anchor;
+        const pixelY = anchor < 0 ? edgeY - 1 : edgeY;
+        return !(modifiers & buttons)
+            && x >= PanelBox.x && x < PanelBox.x + PanelBox.width
+            && y >= pixelY && y < pixelY + 1;
+    }
+
+    _cancelEdgeDwell() {
+        if (this._edgeDwellTimeout) {
+            GLib.source_remove(this._edgeDwellTimeout);
+            this._edgeDwellTimeout = 0;
+        }
+    }
+
+    _checkEdgeDwell() {
+        if (!this._panelHidden || this._animationActive
+            || !this._canRevealWithPointer() || !this._isPointerAtEdge()) {
+            this._cancelEdgeDwell();
+            return;
+        }
+        if (this._edgeDwellTimeout)
+            return;
+
+        const focusWindow = global.display.focus_window;
+        const userTime = focusWindow?.user_time;
+        this._edgeDwellTimeout = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, EDGE_DWELL_TIME, () => {
+                this._edgeDwellTimeout = 0;
+                if (this._panelHidden && !this._animationActive
+                    && this._canRevealWithPointer() && this._isPointerAtEdge()
+                    && global.display.focus_window === focusWindow
+                    && focusWindow?.user_time === userTime) {
+                    this.show(
+                        this._settings.get_double('animation-time-autohide'),
+                        "mouse-enter"
+                    );
+                }
+                return GLib.SOURCE_REMOVE;
+            }
+        );
     }
 
     _initPressureBarrier() {
@@ -376,12 +451,7 @@ export class PanelVisibilityManager {
         this._panelPressure.connect(
             'trigger',
             (barrier) => {
-                if (
-                    Main.layoutManager.primaryMonitor?.inFullscreen
-                    && !this._settings.get_boolean(
-                        'mouse-sensitive-fullscreen-window'
-                    )
-                ) {
+                if (!this._canRevealWithPointer()) {
                     return;
                 }
                 this.show(
@@ -405,6 +475,11 @@ export class PanelVisibilityManager {
             directions: direction
         });
         this._panelPressure.addBarrier(this._panelBarrier);
+        // Absolute motion from RDP can reach the edge without hitting the
+        // pressure barrier. Like Dash to Dock, also watch cursor positions.
+        this._edgePointerListener = this._cursorTracker.connect(
+            'position-invalidated', () => this._checkEdgeDwell()
+        );
     }
 
     _updateStaticBox() {
