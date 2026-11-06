@@ -42,6 +42,7 @@ const ShellActionMode = (
 );
 const _searchEntryBin = Main.overview._overview._controls._searchEntryBin;
 const EDGE_DWELL_TIME = 250;
+const TOP_RIGHT_EXCLUSION_WIDTH = 64;
 
 export class PanelVisibilityManager {
 
@@ -414,6 +415,13 @@ export class PanelVisibilityManager {
                 || this._settings.get_boolean('mouse-sensitive-fullscreen-window'));
     }
 
+    _pointerEdgeRight(isBottomEdge) {
+        // Leave room for window controls on the top-right edge.
+        const exclusion = isBottomEdge ? 0
+            : Math.min(TOP_RIGHT_EXCLUSION_WIDTH, Math.floor(PanelBox.width / 4));
+        return PanelBox.x + PanelBox.width - exclusion;
+    }
+
     _isPointerAtEdge() {
         const [x, y, modifiers] = global.get_pointer();
         const buttons = Clutter.ModifierType.BUTTON1_MASK
@@ -425,7 +433,7 @@ export class PanelVisibilityManager {
         const edgeY = this._base_y - anchor;
         const pixelY = anchor < 0 ? edgeY - 1 : edgeY;
         return !(modifiers & buttons)
-            && x >= PanelBox.x && x < PanelBox.x + PanelBox.width
+            && x >= PanelBox.x && x < this._pointerEdgeRight(anchor < 0)
             && y >= pixelY && y < pixelY + 1;
     }
 
@@ -491,7 +499,7 @@ export class PanelVisibilityManager {
         this._panelBarrier = new Meta.Barrier({
             ...(shellVersion === 45  ? { display: global.display } : { backend: global.backend }),
             x1: PanelBox.x,
-            x2: PanelBox.x + PanelBox.width,
+            x2: this._pointerEdgeRight(anchor_y < 0),
             y1: this._base_y - anchor_y,
             y2: this._base_y - anchor_y,
             directions: direction
